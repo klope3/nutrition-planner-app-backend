@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "seed": "ts-node seed"
+    "seed": "ts-node seed",
+    "server": "ts-node app"
   },
   "keywords": [],
   "author": "",
