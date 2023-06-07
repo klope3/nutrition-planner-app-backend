@@ -1,0 +1,48 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  email        String
+  passwordHash String
+  dayChart     DayChart?
+}
+
+model DayChart {
+  id      Int   @id @default(autoincrement())
+  days    Day[]
+  userRel User  @relation(fields: [userId], references: [id])
+  userId  Int   @unique
+}
+
+model Day {
+  id           Int          @id @default(autoincrement())
+  indexInChart Int
+  sections     DaySection[]
+  dayChartRel  DayChart     @relation(fields: [dayChartId], references: [id])
+  dayChartId   Int
+}
+
+model DaySection {
+  id         Int       @id @default(autoincrement())
+  indexInDay Int
+  portions   Portion[]
+  dayRel     Day       @relation(fields: [dayId], references: [id])
+  dayId      Int
+}
+
+model Portion {
+  id            Int        @id @default(autoincrement())
+  fdcId         Int
+  daySectionRel DaySection @relation(fields: [daySectionId], references: [id])
+  daySectionId  Int
+}
