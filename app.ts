@@ -53,9 +53,8 @@ app.post(
 
 app.get("/users/:userId/chart", async (req, res) => {
   const userId = +req.params.userId;
-  const chartId =
-    req.query.chartId !== undefined ? +req.query.chartId : undefined;
-  if (chartId === undefined || isNaN(chartId)) {
+  const chartId = req.query.chartId === undefined ? -1 : +req.query.chartId;
+  if (isNaN(chartId)) {
     return res
       .status(BAD_REQUEST)
       .send({ message: "Query chartId must be a number." });
@@ -90,9 +89,12 @@ app.get("/users/:userId/chart", async (req, res) => {
     return res.status(FORBIDDEN).send({ message: badTokenMessage });
   }
 
+  //if a daychart id was specified, find the chart with that id.
+  //if it wasn't specified, find the first chart belonging to that user.
   const dayChart = await prisma.dayChart.findFirst({
     where: {
-      id: chartId,
+      id: chartId === -1 ? undefined : chartId,
+      userId: chartId === -1 ? userId : undefined,
     },
     include: {
       days: {
