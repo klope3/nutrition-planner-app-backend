@@ -11,7 +11,8 @@ import {
   NOT_FOUND,
   OK,
 } from "./statusCodes";
-import { createUserToken, getDataFromAuthToken } from "./auth-utils";
+import { createUserToken, tryVerifyToken } from "./auth-utils";
+import { addPortion } from "./db-utils";
 
 const app = express();
 app.use(express.json());
@@ -51,73 +52,105 @@ app.post(
   }
 );
 
-app.get("/users/:userId/chart", async (req, res) => {
-  const userId = +req.params.userId;
-  const chartId = req.query.chartId === undefined ? -1 : +req.query.chartId;
-  if (isNaN(chartId)) {
-    return res
-      .status(BAD_REQUEST)
-      .send({ message: "Query chartId must be a number." });
-  }
-  if (isNaN(userId)) {
-    return res
-      .status(BAD_REQUEST)
-      .send({ message: "User ID must be a number." });
-  }
-  const user = await prisma.user.findFirst({
-    where: {
-      id: userId,
-    },
-  });
-  if (!user) {
-    return res.status(NOT_FOUND).send({ message: "User not found." });
-  }
+app.get(
+  "/users/:userId/chart",
+  validateRequest({
+    params: z.object({
+      userId: z.string().refine((str) => !isNaN(parseInt(str))),
+    }),
+  }),
+  async (req, res) => {
+    const userId = +req.params.userId;
+    const user = await prisma.user.findFirst({
+      where: {
+        id: userId,
+      },
+    });
+    if (!user) {
+      return res.status(NOT_FOUND).send({ message: "User not found." });
+    }
 
-  const split = req.headers.authorization?.split(" ");
-  const badTokenMessage = "Invalid or missing token";
+    const verifyTokenResult = tryVerifyToken(
+      req.headers.authorization,
+      user.id
+    );
+    if (verifyTokenResult.status !== OK) {
+      return res
+        .status(verifyTokenResult.status)
+        .send(verifyTokenResult.message);
+    }
 
-  if (!split || split.length < 2) {
-    return res.status(BAD_REQUEST).send({ message: badTokenMessage });
-  }
-
-  const token = split[1];
-  const tokenData = getDataFromAuthToken(token);
-  if (!tokenData) {
-    return res.status(BAD_REQUEST).send({ message: badTokenMessage });
-  }
-  if (user.id !== tokenData.id) {
-    return res.status(FORBIDDEN).send({ message: badTokenMessage });
-  }
-
-  //if a daychart id was specified, find the chart with that id.
-  //if it wasn't specified, find the first chart belonging to that user.
-  const dayChart = await prisma.dayChart.findFirst({
-    where: {
-      id: chartId === -1 ? undefined : chartId,
-      userId: chartId === -1 ? userId : undefined,
-    },
-    include: {
-      days: {
-        include: {
-          sections: {
-            include: {
-              portions: true,
+    const dayChart = await prisma.dayChart.findFirst({
+      where: {
+        userId,
+      },
+      include: {
+        days: {
+          include: {
+            sections: {
+              include: {
+                portions: true,
+              },
             },
           },
         },
       },
-    },
-  });
-  if (!dayChart) {
-    return res.status(NOT_FOUND).send({ message: "Day chart not found." });
-  }
-  if (dayChart.userId !== userId) {
-    return res
-      .status(FORBIDDEN)
-      .send({ message: "That chart does not belong to that user." });
-  }
+    });
+    if (!dayChart) {
+      return res.status(NOT_FOUND).send({ message: "Day chart not found." });
+    }
+    if (dayChart.userId !== userId) {
+      return res
+        .status(FORBIDDEN)
+        .send({ message: "That chart does not belong to that user." });
+    }
 
-  res.status(OK).send(dayChart);
-});
+    res.status(OK).send(dayChart);
+  }
+);
+
+app.post(
+  "/users/:userId/chart",
+  validateRequest({
+    params: z.object({
+      userId: z.string().refine((str) => !isNaN(parseInt(str))),
+    }),
+    body: z.object({
+      dayIndexInChart: z.number(),
+      sectionIndexInDay: z.number(),
+      fdcId: z.number(),
+    }),
+  }),
+  async (req, res) => {
+    const userId = +req.params.userId;
+    const { dayIndexInChart, sectionIndexInDay, fdcId } = req.body;
+
+    const user = await prisma.user.findFirst({
+      where: {
+        id: userId,
+      },
+    });
+
+    if (!user) {
+      return res.status(NOT_FOUND).send({ message: "User not found." });
+    }
+
+    const { status: tokenStatus, message: tokenMessage } = tryVerifyToken(
+      req.headers.authorization,
+      user.id
+    );
+    if (tokenStatus !== OK) {
+      return res.status(tokenStatus).send({ message: tokenMessage });
+    }
+
+    const addedPortion = await addPortion(
+      fdcId,
+      userId,
+      dayIndexInChart,
+      sectionIndexInDay
+    );
+    res.status(OK).send(addedPortion);
+  }
+);
 
 app.listen(3000);

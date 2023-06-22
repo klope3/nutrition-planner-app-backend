@@ -2,6 +2,7 @@ import { hash } from "bcrypt";
 import { User } from "@prisma/client";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
+import { BAD_REQUEST, FORBIDDEN, OK } from "./statusCodes";
 
 const saltRounds = 11;
 
@@ -33,6 +34,35 @@ export function getDataFromAuthToken(token: any) {
   } catch (e) {
     return undefined;
   }
+}
+
+export function tryVerifyToken(
+  authStr: string | undefined,
+  requestedUserId: number
+) {
+  const split = authStr?.split(" ");
+  const result = {
+    status: BAD_REQUEST,
+    message: "Invalid or missing token",
+  };
+
+  if (!split || split.length < 2) {
+    return result;
+  }
+
+  const token = split[1];
+  const tokenData = getDataFromAuthToken(token);
+  if (!tokenData) {
+    return result;
+  }
+  if (requestedUserId !== tokenData.id) {
+    result.status = FORBIDDEN;
+    return result;
+  }
+
+  result.status = OK;
+  result.message = "";
+  return result;
 }
 
 export const JWT_SECRET = process.env.JWT_SECRET as string;
