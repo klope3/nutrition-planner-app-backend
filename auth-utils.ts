@@ -2,7 +2,9 @@ import { hash } from "bcrypt";
 import { User } from "@prisma/client";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
-import { BAD_REQUEST, FORBIDDEN, OK } from "./statusCodes";
+import { BAD_REQUEST, FORBIDDEN, NOT_FOUND, OK } from "./statusCodes";
+import { prisma } from "./prisma/client";
+import { tryFindUser } from "./db-utils";
 
 const saltRounds = 11;
 
@@ -63,6 +65,44 @@ export function tryVerifyToken(
   result.status = OK;
   result.message = "";
   return result;
+}
+
+export async function tryVerifyUser(
+  userId: number,
+  authStr: string | undefined
+): Promise<{ status: number; message: string }> {
+  const user = await tryFindUser(userId);
+  if (!user) {
+    return {
+      message: "User not found",
+      status: NOT_FOUND,
+    };
+  }
+
+  const split = authStr?.split(" ");
+  const badRequestResult = {
+    status: BAD_REQUEST,
+    message: "Invalid or missing token",
+  };
+
+  if (!split || split.length < 2) {
+    return badRequestResult;
+  }
+
+  const token = split[1];
+  const tokenData = getDataFromAuthToken(token);
+  if (!tokenData) {
+    return badRequestResult;
+  }
+  if (userId !== tokenData.id) {
+    badRequestResult.status = FORBIDDEN;
+    return badRequestResult;
+  }
+
+  return {
+    message: "",
+    status: OK,
+  };
 }
 
 export const JWT_SECRET = process.env.JWT_SECRET as string;

@@ -11,8 +11,9 @@ import {
   NOT_FOUND,
   OK,
 } from "./statusCodes";
-import { createUserToken, tryVerifyToken } from "./auth-utils";
-import { addPortion } from "./db-utils";
+import { createUserToken, tryVerifyToken, tryVerifyUser } from "./auth-utils";
+import { addPortion, tryFindUser } from "./db-utils";
+import { intParseableString } from "./validations";
 
 const app = express();
 app.use(express.json());
@@ -56,28 +57,17 @@ app.get(
   "/users/:userId/chart",
   validateRequest({
     params: z.object({
-      userId: z.string().refine((str) => !isNaN(parseInt(str))),
+      userId: intParseableString,
     }),
   }),
   async (req, res) => {
     const userId = +req.params.userId;
-    const user = await prisma.user.findFirst({
-      where: {
-        id: userId,
-      },
-    });
-    if (!user) {
-      return res.status(NOT_FOUND).send({ message: "User not found." });
-    }
-
-    const verifyTokenResult = tryVerifyToken(
-      req.headers.authorization,
-      user.id
+    const { message, status } = await tryVerifyUser(
+      userId,
+      req.headers.authorization
     );
-    if (verifyTokenResult.status !== OK) {
-      return res
-        .status(verifyTokenResult.status)
-        .send(verifyTokenResult.message);
+    if (status !== OK) {
+      return res.status(status).send({ message: message });
     }
 
     const dayChart = await prisma.dayChart.findFirst({
@@ -113,7 +103,7 @@ app.post(
   "/users/:userId/chart",
   validateRequest({
     params: z.object({
-      userId: z.string().refine((str) => !isNaN(parseInt(str))),
+      userId: intParseableString,
     }),
     body: z.object({
       dayIndexInChart: z.number(),
@@ -125,22 +115,12 @@ app.post(
     const userId = +req.params.userId;
     const { dayIndexInChart, sectionIndexInDay, fdcId } = req.body;
 
-    const user = await prisma.user.findFirst({
-      where: {
-        id: userId,
-      },
-    });
-
-    if (!user) {
-      return res.status(NOT_FOUND).send({ message: "User not found." });
-    }
-
-    const { status: tokenStatus, message: tokenMessage } = tryVerifyToken(
-      req.headers.authorization,
-      user.id
+    const { message, status } = await tryVerifyUser(
+      userId,
+      req.headers.authorization
     );
-    if (tokenStatus !== OK) {
-      return res.status(tokenStatus).send({ message: tokenMessage });
+    if (status !== OK) {
+      return res.status(status).send({ message: message });
     }
 
     const addedPortion = await addPortion(
@@ -150,6 +130,45 @@ app.post(
       sectionIndexInDay
     );
     res.status(OK).send(addedPortion);
+  }
+);
+
+app.delete(
+  "/users/:userId/chart/portions/:portionId",
+  validateRequest({
+    params: z.object({
+      userId: intParseableString,
+      portionId: intParseableString,
+    }),
+  }),
+  async (req, res) => {
+    const userId = +req.params.userId;
+    const portionId = +req.params.portionId;
+
+    const { message, status } = await tryVerifyUser(
+      userId,
+      req.headers.authorization
+    );
+    if (status !== OK) {
+      return res.status(status).send({ message: message });
+    }
+
+    const existing = await prisma.portion.findUnique({
+      where: {
+        id: portionId,
+      },
+    });
+    if (!existing) {
+      return res.status(NOT_FOUND).send({ message: "Portion not found" });
+    }
+
+    const deleted = await prisma.portion.delete({
+      where: {
+        id: portionId,
+      },
+    });
+
+    res.status(OK).send(deleted);
   }
 );
 

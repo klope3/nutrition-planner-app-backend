@@ -51,3 +51,11 @@ export async function addPortion(
 
   return portion;
 }
+
+export async function tryFindUser(userId: number) {
+  return await prisma.user.findFirst({
+    where: {
+      id: userId,
+    },
+  });
+}
