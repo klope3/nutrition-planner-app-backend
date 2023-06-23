@@ -10,14 +10,59 @@ import {
   INTERNAL_SERVER_ERROR,
   NOT_FOUND,
   OK,
+  RESOURCE_CONFLICT,
 } from "./statusCodes";
-import { createUserToken, tryVerifyToken, tryVerifyUser } from "./auth-utils";
+import {
+  createUserToken,
+  hashPassword,
+  tryVerifyToken,
+  tryVerifyUser,
+} from "./auth-utils";
 import { addPortion, tryFindUser } from "./db-utils";
 import { intParseableString } from "./validations";
 
 const app = express();
 app.use(express.json());
 app.use(cors());
+
+app.post(
+  "/users",
+  validateRequest({
+    body: z.object({
+      email: z.string(),
+      password: z.string(),
+    }),
+  }),
+  async (req, res) => {
+    const user = await prisma.user.findFirst({
+      where: {
+        email: req.body.email,
+      },
+    });
+
+    if (user) {
+      return res
+        .status(RESOURCE_CONFLICT)
+        .send({ message: "A user with that email already exists" });
+    }
+
+    const hash = await hashPassword(req.body.password);
+
+    const createdUser = await prisma.user.create({
+      data: {
+        email: req.body.email,
+        passwordHash: hash,
+        dayChart: {
+          create: {},
+        },
+      },
+    });
+
+    const token = createUserToken(createdUser);
+
+    res.status(OK).send({ email: req.body.email, id: createdUser.id, token });
+  }
+);
 
 app.post(
   "/auth/login",
