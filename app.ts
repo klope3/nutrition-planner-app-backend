@@ -1,24 +1,12 @@
-import express from "express";
-import cors from "cors";
-import { validateRequest } from "zod-express-middleware";
-import { z } from "zod";
-import { prisma } from "./prisma/client";
 import bcrypt from "bcrypt";
-import {
-  BAD_REQUEST,
-  FORBIDDEN,
-  INTERNAL_SERVER_ERROR,
-  NOT_FOUND,
-  OK,
-  RESOURCE_CONFLICT,
-} from "./statusCodes";
-import {
-  createUserToken,
-  hashPassword,
-  tryVerifyToken,
-  tryVerifyUser,
-} from "./auth-utils";
-import { addPortion, tryFindUser } from "./db-utils";
+import cors from "cors";
+import express from "express";
+import { z } from "zod";
+import { validateRequest } from "zod-express-middleware";
+import { createUserToken, hashPassword, tryVerifyUser } from "./auth-utils";
+import { addPortion } from "./db-utils";
+import { prisma } from "./prisma/client";
+import { FORBIDDEN, NOT_FOUND, OK, RESOURCE_CONFLICT } from "./statusCodes";
 import { intParseableString } from "./validations";
 
 const app = express();

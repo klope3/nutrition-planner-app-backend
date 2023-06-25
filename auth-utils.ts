@@ -1,10 +1,9 @@
-import { hash } from "bcrypt";
 import { User } from "@prisma/client";
+import { hash } from "bcrypt";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
-import { BAD_REQUEST, FORBIDDEN, NOT_FOUND, OK } from "./statusCodes";
-import { prisma } from "./prisma/client";
 import { tryFindUser } from "./db-utils";
+import { BAD_REQUEST, FORBIDDEN, NOT_FOUND, OK } from "./statusCodes";
 
 const saltRounds = 11;
 
